@@ -11,25 +11,6 @@ This pipeline provides an end-to-end solution for:
 4. **Model Comparison**: Compare and evaluate different models
 5. **Visualization**: Generate comprehensive plots and reports
 
-## Features
-
-### Supported Models
-- **MLP**: Multi-Layer Perceptron (fully connected baseline)
-- **CNN**: Standard Convolutional Neural Network (3 conv layers)
-- **ResNet**: Residual Network with skip connections
-- **DeepCNN**: Deeper CNN with 4 conv layers and more filters
-- **Attention**: CNN with spatial attention mechanism
-
-### Key Capabilities
-- Real-time tactile data visualization during collection
-- **Online real-time shape classification** with live sensor feed
-- Automatic train/validation/test split with stratification
-- Early stopping and learning rate scheduling
-- Comprehensive metrics (accuracy, precision, recall, F1-score)
-- Confusion matrices and training curves
-- Model comparison plots and tables
-- Detailed JSON reports
-- **Prediction confidence filtering and temporal smoothing**
 
 ## Installation
 
@@ -296,61 +277,8 @@ All models are evaluated on:
 - Verify baud rate matches sensor configuration
 - Ensure proper permissions: `sudo chmod 666 /dev/ttyUSB0`
 
-### CUDA Out of Memory
-- Reduce batch size: `--batch-size 16`
-- Use CPU: Model will automatically fall back if CUDA unavailable
+## Credits
 
-### Data Loading Errors
-- Ensure data files exist in specified directory
-- Check .npz file format is correct
-- Run `step explore` to verify data integrity
+The hardware and base code are from Binghao Huang: https://docs.google.com/document/d/1XGyn-iV_wzRmcMIsyS3kwcrjxbnvblZAyigwbzDsX-E/edit?tab=t.0#heading=h.ny8zu0pq9mxy
 
-### Model Training Fails
-- Check data shape matches model input
-- Verify number of classes matches labels
-- Ensure sufficient GPU memory
 
-## Tips for Best Results
-
-1. **Data Collection**:
-   - Collect diverse contact patterns for each shape
-   - Ensure consistent pressure and contact area
-   - Collect at least 100 samples per class
-
-2. **Training**:
-   - Start with CNN for best general performance
-   - Use learning rate scheduling for better convergence
-   - Monitor validation accuracy for overfitting
-
-3. **Model Selection**:
-   - CNN: Best for most tactile classification tasks
-   - ResNet: Better for complex shapes with similar patterns
-   - LSTM/BiLSTM: Good for time-series tactile data
-   - CNN-LSTM: Best for spatiotemporal patterns
-
-## Citation
-
-If you use this pipeline in your research, please cite:
-
-```
-@software{tactile_classification_pipeline,
-  title={Tactile Sensor Shape Classification Pipeline},
-  author={Your Name},
-  year={2024},
-  url={https://github.com/yourusername/tactile_encoder}
-}
-```
-
-## License
-
-MIT License
-
-## Contact
-
-For questions or issues, please open an issue on GitHub or contact the maintainer.
-
-## Acknowledgments
-
-- PyTorch for deep learning framework
-- scikit-learn for evaluation metrics
-- OpenCV for visualization

@@ -268,7 +268,7 @@ class TactileOnlineEvaluator:
         # Create display window (match original size: 32*30 x 16*30)
         WINDOW_WIDTH = self.sensor_shape[1] * 30   # 32 * 30 = 960
         WINDOW_HEIGHT = self.sensor_shape[0] * 30  # 16 * 30 = 480
-        print("🖼️  Creating display window...")
+        print("Creating display window...")
         cv2.namedWindow('Tactile Data', cv2.WINDOW_NORMAL)
         cv2.resizeWindow('Tactile Data', WINDOW_WIDTH, WINDOW_HEIGHT)
         
@@ -279,7 +279,7 @@ class TactileOnlineEvaluator:
                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
         cv2.imshow('Tactile Data', test_img)
         cv2.waitKey(1)  # Process the display
-        print("🖼️  Test window displayed")
+        print("Test window displayed")
         
         try:
             last_update = time.time()
@@ -293,15 +293,15 @@ class TactileOnlineEvaluator:
             # Initialize temporal filter (like original script)
             prev_frame = np.zeros_like(self.contact_data_norm)
             
-            print("🔄 Starting evaluation loop...")
-            print("⏱️  Waiting for sensor data... (press Ctrl+C to abort)")
+            print("Starting evaluation loop...")
+            print("Waiting for sensor data... (press Ctrl+C to abort)")
             
             while True:
                 loop_count += 1
                 
                 # Debug: Print status every 1000 loops
                 if loop_count % 1000 == 0:
-                    print(f"📊 Loop {loop_count}, Data received: {data_received_count}, Flag: {self.flag}")
+                    print(f"Loop {loop_count}, Data received: {data_received_count}, Flag: {self.flag}")
                 
                 if self.flag:
                     data_received_count += 1
