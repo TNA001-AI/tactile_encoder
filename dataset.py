@@ -149,20 +149,24 @@ class TactileDataLoader:
         num_classes = train_dataset.get_num_classes()
         label_names = train_dataset.get_label_names()
 
+        # Check if CUDA is available for pin_memory
+        import torch
+        use_pin_memory = torch.cuda.is_available()
+
         # Create dataloaders
         train_loader = DataLoader(
             train_dataset, batch_size=batch_size,
-            shuffle=shuffle, num_workers=num_workers, pin_memory=True
+            shuffle=shuffle, num_workers=num_workers, pin_memory=use_pin_memory
         )
 
         val_loader = DataLoader(
             val_dataset, batch_size=batch_size,
-            shuffle=False, num_workers=num_workers, pin_memory=True
+            shuffle=False, num_workers=num_workers, pin_memory=use_pin_memory
         )
 
         test_loader = DataLoader(
             test_dataset, batch_size=batch_size,
-            shuffle=False, num_workers=num_workers, pin_memory=True
+            shuffle=False, num_workers=num_workers, pin_memory=use_pin_memory
         )
 
         return train_loader, val_loader, test_loader, num_classes, label_names

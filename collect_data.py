@@ -11,24 +11,50 @@ import threading
 import cv2
 import time
 import json
+import argparse
 from datetime import datetime
 from scipy.ndimage import gaussian_filter
+from config_utils import load_config, override_config_from_args
 
 class TactileDataCollector:
-    def __init__(self, port='/dev/ttyUSB0', baud=2000000, sensor_shape=(16, 32)):
-        self.port = port
-        self.baud = baud
-        self.sensor_shape = sensor_shape
-        self.contact_data_norm = np.zeros(sensor_shape)
+    def __init__(self, config=None):
+        """
+        Initialize tactile data collector
+        
+        Args:
+            config: ConfigManager instance or None to load default
+        """
+        if config is None:
+            from config_utils import load_config
+            config = load_config()
+        
+        self.config = config
+        
+        # Sensor configuration
+        sensor_config = config.get_sensor_config()
+        self.port = sensor_config['port']
+        self.baud = sensor_config['baud_rate']
+        self.sensor_shape = tuple(sensor_config['shape'])
+        self.timeout = sensor_config.get('timeout', 1)
+        
+        # Data collection configuration
+        data_config = config.get_data_config()
+        self.THRESHOLD = data_config['threshold']
+        self.NOISE_SCALE = data_config['noise_scale']
+        self.gaussian_sigma = data_config['gaussian_sigma']
+        self.shape_labels = data_config['shape_labels']
+        self.samples_per_shape = data_config['samples_per_shape']
+        self.data_dir = data_config['data_dir']
+        
+        # Initialize sensor data
+        self.contact_data_norm = np.zeros(self.sensor_shape)
         self.flag = False
         self.median = None
         self.serDev = None
         self.serialThread = None
-        self.prev_frame = np.zeros(sensor_shape)
-
-        # Data collection parameters
-        self.THRESHOLD = 30
-        self.NOISE_SCALE = 50
+        self.prev_frame = np.zeros(self.sensor_shape)
+        
+        # Collection tracking
         self.collected_samples = []
         self.current_label = None
 
@@ -58,6 +84,9 @@ class TactileDataCollector:
                             self.contact_data_norm = contact_data / self.NOISE_SCALE
                         else:
                             self.contact_data_norm = contact_data / np.max(contact_data)
+                        
+                        # Apply gaussian smoothing
+                        self.contact_data_norm = gaussian_filter(self.contact_data_norm, sigma=self.gaussian_sigma)
                     continue
 
                 if current is not None:
@@ -73,8 +102,8 @@ class TactileDataCollector:
 
     def start_sensor(self):
         """Initialize serial connection and start reading thread"""
-        print(f"Connecting to sensor on {self.port}...")
-        self.serDev = serial.Serial(self.port, self.baud)
+        print(f"Connecting to sensor on {self.port} at {self.baud} baud...")
+        self.serDev = serial.Serial(self.port, self.baud, timeout=self.timeout)
         self.serDev.flush()
 
         # Calibration phase - collect 30 frames for baseline median
@@ -256,25 +285,64 @@ class TactileDataCollector:
             self.serDev.close()
 
 
-if __name__ == '__main__':
-    # Example usage
-    collector = TactileDataCollector(port='/dev/ttyUSB1', baud=2000000)
+def main():
+    """Main function with command line argument support"""
+    parser = argparse.ArgumentParser(description='Collect tactile sensor data for shape classification')
+    parser.add_argument('--config', type=str, default='config.json', help='Configuration file path')
+    parser.add_argument('--port', type=str, help='Sensor port (overrides config)')
+    parser.add_argument('--shapes', type=str, nargs='+', help='Shape labels to collect')
+    parser.add_argument('--samples', type=int, help='Samples per shape (overrides config)')
+    parser.add_argument('--data-dir', type=str, help='Output directory (overrides config)')
+    
+    args = parser.parse_args()
+    
+    # Load configuration
+    try:
+        config = load_config(args.config)
+        print(f"✓ Loaded configuration from {args.config}")
+    except Exception as e:
+        print(f"❌ Error loading config: {e}")
+        print("Using default configuration...")
+        from config_utils import get_default_config
+        config = get_default_config()
+    
+    # Override with command line arguments
+    config = override_config_from_args(config, args)
+    
+    # Handle shapes argument
+    if args.shapes:
+        config.set('data_collection.shape_labels', args.shapes)
+    
+    # Create collector
+    collector = TactileDataCollector(config)
+    
+    print("\n" + "="*70)
+    print("TACTILE DATA COLLECTION")
+    print("="*70)
+    print(f"Sensor: {collector.port} @ {collector.baud} baud")
+    print(f"Shapes: {collector.shape_labels}")
+    print(f"Samples per shape: {collector.samples_per_shape}")
+    print(f"Output directory: {collector.data_dir}")
+    print("="*70)
 
     try:
         # Start sensor
         collector.start_sensor()
 
-        # Define shapes to collect
-        shapes = ['cube', 'cylinder', 'cone', 'pyramid']
-
         # Collect dataset
         collector.collect_dataset(
-            shape_labels=shapes,
-            samples_per_shape=100,
-            save_dir='./tactile_data'
+            shape_labels=collector.shape_labels,
+            samples_per_shape=collector.samples_per_shape,
+            save_dir=collector.data_dir
         )
 
     except KeyboardInterrupt:
         print("\nCollection interrupted by user")
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
     finally:
         collector.close()
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,78 @@
+{
+  "sensor": {
+    "port": "/dev/ttyUSB1",
+    "baud_rate": 2000000,
+    "shape": [16, 32],
+    "timeout": 1
+  },
+  "data_collection": {
+    "shape_labels": ["sphere", "cube", "cylinder", "cone", "pyramid"],
+    "samples_per_shape": 100,
+    "data_dir": "./tactile_data",
+    "threshold": 30,
+    "noise_scale": 50,
+    "gaussian_sigma": 0.1,
+    "temporal_alpha": 0.2
+  },
+  "training": {
+    "batch_size": 32,
+    "num_epochs": 100,
+    "learning_rate": 0.001,
+    "weight_decay": 1e-4,
+    "patience": 10,
+    "min_delta": 0.001,
+    "train_ratio": 0.7,
+    "val_ratio": 0.15,
+    "test_ratio": 0.15,
+    "random_seed": 42,
+    "use_cuda": true,
+    "num_workers": 4
+  },
+  "models": {
+    "available_models": ["mlp", "cnn", "resnet", "deepcnn", "attention"],
+    "default_model": "cnn",
+    "model_params": {
+      "mlp": {
+        "hidden_dims": [512, 256, 128],
+        "dropout": 0.2
+      },
+      "cnn": {
+        "dropout": 0.2
+      },
+      "resnet": {
+        "num_blocks": 3,
+        "dropout": 0.2
+      },
+      "deepcnn": {
+        "dropout": 0.3
+      },
+      "attention": {
+        "dropout": 0.2
+      }
+    }
+  },
+  "evaluation": {
+    "min_confidence": 0.8,
+    "smooth_predictions": true,
+    "smoothing_window": 5,
+    "update_interval": 0.5,
+    "save_history": true
+  },
+  "paths": {
+    "data_dir": "./tactile_data",
+    "results_dir": "./results",
+    "comparison_dir": "./comparison_results",
+    "config_dir": "./configs"
+  },
+  "logging": {
+    "level": "INFO",
+    "save_logs": true,
+    "log_dir": "./logs"
+  },
+  "visualization": {
+    "colormap": "jet",
+    "window_size": [640, 320],
+    "font_scale": 1.0,
+    "line_thickness": 2
+  }
+}

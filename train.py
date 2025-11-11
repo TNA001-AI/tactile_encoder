@@ -4,6 +4,7 @@ Training pipeline for tactile sensor shape classification models
 import os
 import time
 import json
+import argparse
 import numpy as np
 import torch
 import torch.nn as nn
@@ -16,13 +17,14 @@ from datetime import datetime
 
 from dataset import TactileDataLoader
 from models import get_model
+from config_utils import load_config, override_config_from_args
 
 
 class Trainer:
     """Training pipeline for tactile classification models"""
 
     def __init__(self, model, train_loader, val_loader, test_loader,
-                 num_classes, label_names, device='cuda', save_dir='./results'):
+                 num_classes, label_names, config=None, save_dir=None):
         """
         Args:
             model: PyTorch model
@@ -31,18 +33,34 @@ class Trainer:
             test_loader: test data loader
             num_classes: number of output classes
             label_names: list of class names
-            device: 'cuda' or 'cpu'
-            save_dir: directory to save results
+            config: ConfigManager instance
+            save_dir: directory to save results (overrides config)
         """
-        self.model = model.to(device)
+        if config is None:
+            from config_utils import load_config
+            config = load_config()
+        
+        self.config = config
+        training_config = config.get_training_config()
+        
+        # Device setup
+        if training_config.get('use_cuda', True) and torch.cuda.is_available():
+            self.device = 'cuda'
+        else:
+            self.device = 'cpu'
+        
+        self.model = model.to(self.device)
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.test_loader = test_loader
         self.num_classes = num_classes
         self.label_names = label_names
-        self.device = device
+        
+        # Save directory
+        if save_dir is None:
+            save_dir = config.get('paths.results_dir', './results')
         self.save_dir = save_dir
-
+        
         os.makedirs(save_dir, exist_ok=True)
 
         # Training history
@@ -112,19 +130,31 @@ class Trainer:
 
         return val_loss, val_acc
 
-    def train(self, num_epochs=100, learning_rate=0.001, weight_decay=1e-4,
-              optimizer_name='adam', scheduler_name='plateau', early_stopping_patience=15):
+    def train(self, num_epochs=None, learning_rate=None, weight_decay=None,
+              optimizer_name='adam', scheduler_name='plateau', early_stopping_patience=None):
         """
         Train the model
 
         Args:
-            num_epochs: number of training epochs
-            learning_rate: initial learning rate
-            weight_decay: L2 regularization
+            num_epochs: number of training epochs (uses config if None)
+            learning_rate: initial learning rate (uses config if None)
+            weight_decay: L2 regularization (uses config if None)
             optimizer_name: 'adam' or 'sgd'
             scheduler_name: 'plateau' or 'cosine'
-            early_stopping_patience: epochs to wait before early stopping
+            early_stopping_patience: epochs to wait before early stopping (uses config if None)
         """
+        # Get training config
+        training_config = self.config.get_training_config()
+        
+        # Use config values if not provided
+        if num_epochs is None:
+            num_epochs = training_config.get('num_epochs', 100)
+        if learning_rate is None:
+            learning_rate = training_config.get('learning_rate', 0.001)
+        if weight_decay is None:
+            weight_decay = training_config.get('weight_decay', 1e-4)
+        if early_stopping_patience is None:
+            early_stopping_patience = training_config.get('patience', 15)
         # Loss function
         criterion = nn.CrossEntropyLoss()
 
@@ -141,7 +171,7 @@ class Trainer:
         # Learning rate scheduler
         if scheduler_name.lower() == 'plateau':
             scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5,
-                                         patience=5, verbose=True)
+                                         patience=5)
         elif scheduler_name.lower() == 'cosine':
             scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs)
         else:
@@ -336,24 +366,43 @@ class Trainer:
         plt.close()
 
 
-def train_model(model_name, data_dir='./tactile_data', save_dir=None,
-                batch_size=32, num_epochs=100, learning_rate=0.001):
+def train_model(model_name, config=None, data_dir=None, save_dir=None,
+                batch_size=None, num_epochs=None, learning_rate=None):
     """
     Complete training pipeline for a single model
 
     Args:
         model_name: name of the model to train
-        data_dir: directory containing training data
-        save_dir: directory to save results
-        batch_size: batch size for training
-        num_epochs: number of training epochs
-        learning_rate: learning rate
+        config: ConfigManager instance (loads default if None)
+        data_dir: directory containing training data (overrides config)
+        save_dir: directory to save results (overrides config)
+        batch_size: batch size for training (overrides config)
+        num_epochs: number of training epochs (overrides config)
+        learning_rate: learning rate (overrides config)
 
     Returns:
         results dictionary
     """
+    # Load config if not provided
+    if config is None:
+        config = load_config()
+    
+    # Get config values with overrides
+    training_config = config.get_training_config()
+    paths_config = config.get_paths_config()
+    
+    if data_dir is None:
+        data_dir = paths_config.get('data_dir', './tactile_data')
+    if save_dir is None:
+        save_dir = os.path.join(paths_config.get('results_dir', './results'), model_name)
+    if batch_size is None:
+        batch_size = training_config.get('batch_size', 32)
+    if num_epochs is None:
+        num_epochs = training_config.get('num_epochs', 100)
+    if learning_rate is None:
+        learning_rate = training_config.get('learning_rate', 0.001)
     # Setup
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cpu')
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     if save_dir is None:
@@ -381,7 +430,7 @@ def train_model(model_name, data_dir='./tactile_data', save_dir=None,
 
     # Create trainer
     trainer = Trainer(model, train_loader, val_loader, test_loader,
-                     num_classes, label_names, device=device, save_dir=save_dir)
+                     num_classes, label_names, config=config, save_dir=save_dir)
 
     # Train
     history = trainer.train(num_epochs=num_epochs, learning_rate=learning_rate)
@@ -413,12 +462,68 @@ def train_model(model_name, data_dir='./tactile_data', save_dir=None,
     return results
 
 
+def main():
+    """Main function with command line argument support"""
+    parser = argparse.ArgumentParser(description='Train tactile classification model')
+    parser.add_argument('--config', type=str, default='config.json', help='Configuration file path')
+    parser.add_argument('--model', type=str, help='Model name (overrides config)')
+    parser.add_argument('--data-dir', type=str, help='Data directory (overrides config)')
+    parser.add_argument('--batch-size', type=int, help='Batch size (overrides config)')
+    parser.add_argument('--epochs', type=int, help='Number of epochs (overrides config)')
+    parser.add_argument('--learning-rate', type=float, help='Learning rate (overrides config)')
+    parser.add_argument('--save-dir', type=str, help='Results directory (overrides config)')
+    
+    args = parser.parse_args()
+    
+    # Load configuration
+    try:
+        config = load_config(args.config)
+        print(f"✓ Loaded configuration from {args.config}")
+    except Exception as e:
+        print(f"❌ Error loading config: {e}")
+        print("Using default configuration...")
+        from config_utils import get_default_config
+        config_dict = get_default_config()
+        from config_utils import ConfigManager
+        config = ConfigManager.__new__(ConfigManager)
+        config.config = config_dict
+    
+    # Override with command line arguments
+    config = override_config_from_args(config, args)
+    
+    # Get model name
+    model_name = args.model or config.get('models.default_model', 'cnn')
+    
+    print("\n" + "="*70)
+    print("TACTILE MODEL TRAINING")
+    print("="*70)
+    print(f"Model: {model_name}")
+    print(f"Data directory: {config.get('paths.data_dir', './tactile_data')}")
+    print(f"Batch size: {config.get('training.batch_size', 32)}")
+    print(f"Epochs: {config.get('training.num_epochs', 100)}")
+    print(f"Learning rate: {config.get('training.learning_rate', 0.001)}")
+    print("="*70)
+    
+    # Train model
+    try:
+        results = train_model(
+            model_name=model_name,
+            config=config,
+            data_dir=args.data_dir,
+            save_dir=args.save_dir,
+            batch_size=args.batch_size,
+            num_epochs=args.epochs,
+            learning_rate=args.learning_rate
+        )
+        
+        print(f"\n✓ Training completed successfully!")
+        print(f"Test Accuracy: {results['test_results']['accuracy']:.4f}")
+        print(f"Results saved to: {results.get('save_dir', 'results')}")
+        
+    except Exception as e:
+        print(f"\n❌ Training failed: {e}")
+        raise
+
+
 if __name__ == '__main__':
-    # Example: Train a single model
-    results = train_model(
-        model_name='cnn',
-        data_dir='./tactile_data',
-        batch_size=32,
-        num_epochs=100,
-        learning_rate=0.001
-    )
+    main()

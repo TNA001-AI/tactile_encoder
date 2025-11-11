@@ -18,17 +18,18 @@ This pipeline provides an end-to-end solution for:
 - **CNN**: Standard Convolutional Neural Network (3 conv layers)
 - **ResNet**: Residual Network with skip connections
 - **DeepCNN**: Deeper CNN with 4 conv layers and more filters
-- **VGG**: VGG-style architecture with conv-conv-pool blocks
 - **Attention**: CNN with spatial attention mechanism
 
 ### Key Capabilities
 - Real-time tactile data visualization during collection
+- **Online real-time shape classification** with live sensor feed
 - Automatic train/validation/test split with stratification
 - Early stopping and learning rate scheduling
 - Comprehensive metrics (accuracy, precision, recall, F1-score)
 - Confusion matrices and training curves
 - Model comparison plots and tables
 - Detailed JSON reports
+- **Prediction confidence filtering and temporal smoothing**
 
 ## Installation
 
@@ -36,19 +37,14 @@ This pipeline provides an end-to-end solution for:
 
 2. Install dependencies:
 ```bash
+conda create -n tactile python==3.12
+conda activate tactile
 pip install -r requirements.txt
 ```
 
 ## Quick Start
 
-### Option 1: Run Full Pipeline (Recommended)
-
-```bash
-# Run complete pipeline (skip data collection if you already have data)
-python pipeline.py --step all --skip-collection --data-dir ./tactile_data --epochs 50
-```
-
-### Option 2: Step-by-Step Execution
+### Step-by-Step Execution
 
 #### Step 1: Collect Data
 ```bash
@@ -56,10 +52,6 @@ python pipeline.py --step all --skip-collection --data-dir ./tactile_data --epoc
 python collect_data.py
 ```
 
-Or use the pipeline:
-```bash
-python pipeline.py --step collect
-```
 
 The data collector will:
 - Connect to your tactile sensor (default: /dev/ttyUSB0)
@@ -68,34 +60,22 @@ The data collector will:
 - Press 's' to save each sample, 'q' to finish early
 - Save data as .npz files in `./tactile_data/`
 
-#### Step 2: Explore Data
-```bash
-python pipeline.py --step explore --data-dir ./tactile_data
-```
-
-#### Step 3: Train Models
-```bash
-# Train all models
-python pipeline.py --step train --data-dir ./tactile_data --epochs 100
-
-# Train specific models
-python pipeline.py --step train --models cnn resnet --epochs 50
-```
-
-Or train a single model:
+#### Step 2: Train Models
 ```bash
 python train.py
 ```
 
-#### Step 4: Compare Models
-```bash
-python pipeline.py --step compare
-```
-
-Or:
+#### Step 3: Compare Models
 ```bash
 python compare_models.py
 ```
+
+#### Step 4: Evaluate Online (Real-time Predictions)
+```bash
+python eval_online.py
+```
+
+Or use the quick start menu option 5.
 
 ## Usage Examples
 
@@ -123,20 +103,20 @@ comparison_df = compare_all_models(
 )
 ```
 
-### Example 3: Custom Pipeline
+### Example 3: Online Real-time Evaluation
 ```python
-from pipeline import TactileClassificationPipeline
+from eval_online import TactileOnlineEvaluator
 
-# Create custom configuration
-config = {
-    'shape_labels': ['sphere', 'cube', 'cylinder'],
-    'samples_per_shape': 150,
-    'models_to_train': ['cnn', 'resnet'],
-    'num_epochs': 50
-}
+# Create evaluator with trained model
+evaluator = TactileOnlineEvaluator(
+    model_path='./results/cnn/best_model.pth',
+    model_name='cnn',
+    port='/dev/ttyUSB0'
+)
 
-pipeline = TactileClassificationPipeline(config=config)
-pipeline.run_full_pipeline(skip_collection=True)
+# Start sensor and run evaluation
+evaluator.start_sensor()
+evaluator.run_evaluation(min_confidence=0.5, smooth_predictions=True)
 ```
 
 ### Example 4: Load and Use Trained Model
@@ -164,7 +144,8 @@ tactile_encoder/
 ├── models.py                # All model architectures
 ├── train.py                 # Training pipeline
 ├── compare_models.py        # Model comparison and evaluation
-├── pipeline.py              # Main pipeline orchestrator
+├── eval_online.py           # Real-time online evaluation
+├── quick_start.py           # Interactive menu interface
 ├── requirements.txt         # Python dependencies
 ├── README.md               # This file
 │
@@ -207,25 +188,6 @@ You can create a custom configuration file:
 }
 ```
 
-Then run:
-```bash
-python pipeline.py --config my_config.json --step all
-```
-
-## Command Line Arguments
-
-### pipeline.py
-```
---config PATH           Path to configuration JSON file
---step STEP            Step to run: collect, explore, train, compare, all
---skip-collection      Skip data collection step
---models MODEL [...]   Specific models to train
---data-dir PATH        Directory containing tactile data
---results-dir PATH     Directory to save results
---batch-size INT       Batch size for training (default: 32)
---epochs INT           Number of training epochs (default: 100)
---learning-rate FLOAT  Learning rate (default: 0.001)
-```
 
 ## Model Architectures
 
@@ -281,6 +243,40 @@ python pipeline.py --config my_config.json --step all
 - `model_comparison.csv`: Summary table
 - `confusion_matrices_comparison.png`: Side-by-side confusion matrices
 - `detailed_comparison.json`: Complete results in JSON format
+
+## Online Real-time Evaluation
+
+The `eval_online.py` script provides real-time shape classification:
+
+### Features
+- **Live sensor feed**: Real-time tactile data visualization
+- **Automatic model selection**: Uses best trained model by default
+- **Confidence filtering**: Only show predictions above threshold
+- **Temporal smoothing**: Average predictions over time for stability
+- **Interactive controls**: 
+  - Press 'q' to quit
+  - Press 's' to save prediction history
+- **Prediction history**: JSON logs with timestamps and confidence scores
+
+### Usage
+```bash
+# Auto-detect best model and run
+python eval_online.py
+
+# Or use quick start menu
+python quick_start.py  # Select option 5
+```
+
+### Configuration Options
+- **Port**: Sensor serial port (default: `/dev/ttyUSB0`)
+- **Min confidence**: Threshold for showing predictions (default: 0.5)
+- **Smoothing**: Enable temporal prediction smoothing (default: yes)
+
+### Output
+- Real-time color-coded tactile visualization
+- Live prediction display with confidence scores
+- Prediction history saved as JSON files
+- Console logging of high-confidence predictions
 
 ## Performance Metrics
 

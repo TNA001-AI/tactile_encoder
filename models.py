@@ -254,75 +254,6 @@ class DeepCNN(nn.Module):
         return x
 
 
-class VGGLike(nn.Module):
-    """VGG-style architecture adapted for tactile data"""
-
-    def __init__(self, input_shape=(16, 32), num_classes=5):
-        """
-        Args:
-            input_shape: tuple (height, width) of tactile sensor
-            num_classes: number of output classes
-        """
-        super(VGGLike, self).__init__()
-
-        self.input_shape = input_shape
-
-        # VGG-style blocks: conv-conv-pool
-        self.conv1_1 = nn.Conv2d(1, 64, kernel_size=3, padding=1)
-        self.conv1_2 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
-        self.bn1 = nn.BatchNorm2d(64)
-
-        self.conv2_1 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        self.conv2_2 = nn.Conv2d(128, 128, kernel_size=3, padding=1)
-        self.bn2 = nn.BatchNorm2d(128)
-
-        self.conv3_1 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
-        self.conv3_2 = nn.Conv2d(256, 256, kernel_size=3, padding=1)
-        self.bn3 = nn.BatchNorm2d(256)
-
-        self.pool = nn.MaxPool2d(2, 2)
-        self.dropout = nn.Dropout(0.5)
-
-        # Global average pooling
-        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
-
-        # Classifier
-        self.fc = nn.Sequential(
-            nn.Linear(256, 128),
-            nn.ReLU(),
-            nn.Dropout(0.5),
-            nn.Linear(128, num_classes)
-        )
-
-    def forward(self, x):
-        if x.dim() == 3:
-            x = x.unsqueeze(1)
-
-        # Block 1
-        x = F.relu(self.conv1_1(x))
-        x = F.relu(self.conv1_2(x))
-        x = self.bn1(x)
-        x = self.pool(x)
-
-        # Block 2
-        x = F.relu(self.conv2_1(x))
-        x = F.relu(self.conv2_2(x))
-        x = self.bn2(x)
-        x = self.pool(x)
-
-        # Block 3
-        x = F.relu(self.conv3_1(x))
-        x = F.relu(self.conv3_2(x))
-        x = self.bn3(x)
-        x = self.pool(x)
-
-        # Global pooling and classifier
-        x = self.global_avg_pool(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
-
-        return x
-
 
 class AttentionCNN(nn.Module):
     """CNN with spatial attention mechanism for tactile data"""
@@ -401,7 +332,7 @@ def get_model(model_name, input_shape=(16, 32), num_classes=5, **kwargs):
     Factory function to get model by name
 
     Args:
-        model_name: str, one of ['mlp', 'cnn', 'resnet', 'deepcnn', 'vgg', 'attention']
+        model_name: str, one of ['mlp', 'cnn', 'resnet', 'deepcnn', 'attention']
         input_shape: tuple (height, width) of tactile sensor
         num_classes: number of output classes
         **kwargs: additional model-specific parameters
@@ -414,7 +345,6 @@ def get_model(model_name, input_shape=(16, 32), num_classes=5, **kwargs):
         'cnn': CNN,
         'resnet': ResNet,
         'deepcnn': DeepCNN,
-        'vgg': VGGLike,
         'attention': AttentionCNN
     }
 
@@ -435,7 +365,7 @@ if __name__ == '__main__':
     print("Testing all models:")
     print("=" * 60)
 
-    model_names = ['mlp', 'cnn', 'resnet', 'deepcnn', 'vgg', 'attention']
+    model_names = ['mlp', 'cnn', 'resnet', 'deepcnn', 'attention']
 
     for model_name in model_names:
         model = get_model(model_name, input_shape=input_shape, num_classes=num_classes)

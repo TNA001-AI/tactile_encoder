@@ -4,6 +4,8 @@ Simple interface for common use cases
 """
 import os
 import sys
+import json
+from config_utils import load_config
 
 
 def print_menu():
@@ -15,10 +17,8 @@ def print_menu():
     print("2. Explore existing data")
     print("3. Train a single model")
     print("4. Train and compare all models")
-    print("5. Run full pipeline (with existing data)")
-    print("6. Run full pipeline (collect new data)")
-    print("7. Create custom configuration file")
-    print("8. Exit")
+    print("5. Evaluate model online (real-time predictions)")
+    print("6. Exit")
     print("\n" + "="*70)
 
 
@@ -26,29 +26,47 @@ def collect_data():
     """Collect data from sensor"""
     print("\nStarting data collection...")
     print("Make sure your tactile sensor is connected!")
+    
+    # Load config
+    try:
+        config = load_config()
+        data_config = config.get_data_config()
+        sensor_config = config.get_sensor_config()
+    except:
+        print("Warning: Could not load config, using defaults")
+        data_config = {"shape_labels": ["sphere", "cube", "cylinder"], "samples_per_shape": 100}
+        sensor_config = {"port": "/dev/ttyUSB0", "baud_rate": 2000000}
 
-    shapes = input("\nEnter shape labels (comma-separated, default: sphere,cube,cylinder): ").strip()
+    # Get user input with config defaults
+    default_shapes = ",".join(data_config.get('shape_labels', ["sphere", "cube", "cylinder"]))
+    shapes = input(f"\nEnter shape labels (comma-separated, default: {default_shapes}): ").strip()
     if not shapes:
-        shapes = "sphere,cube,cylinder"
+        shapes = default_shapes
     shapes_list = [s.strip() for s in shapes.split(',')]
 
-    samples = input("Samples per shape (default: 100): ").strip()
+    default_samples = data_config.get('samples_per_shape', 100)
+    samples = input(f"Samples per shape (default: {default_samples}): ").strip()
     if not samples:
-        samples = "100"
+        samples = str(default_samples)
 
     print(f"\nWill collect {samples} samples for: {', '.join(shapes_list)}")
+    print(f"Using sensor port: {sensor_config.get('port', '/dev/ttyUSB0')}")
     input("Press Enter to start...")
 
     from collect_data import TactileDataCollector
 
-    collector = TactileDataCollector(port='/dev/ttyUSB0', baud=2000000)
+    # Update config with user choices
+    config.set('data_collection.shape_labels', shapes_list)
+    config.set('data_collection.samples_per_shape', int(samples))
+    
+    collector = TactileDataCollector(config=config)
 
     try:
         collector.start_sensor()
         collector.collect_dataset(
             shape_labels=shapes_list,
             samples_per_shape=int(samples),
-            save_dir='./tactile_data'
+            save_dir=config.get('paths.data_dir', './tactile_data')
         )
     finally:
         collector.close()
@@ -82,45 +100,61 @@ def explore_data():
 
 def train_single_model():
     """Train a single model"""
+    # Load config
+    try:
+        config = load_config()
+        training_config = config.get_training_config()
+        models_config = config.get_model_config()
+    except:
+        print("Warning: Could not load config, using defaults")
+        training_config = {"num_epochs": 50, "batch_size": 32, "learning_rate": 0.001}
+        models_config = {"available_models": ["mlp", "cnn", "resnet", "attention"]}
+    
     print("\nAvailable models:")
-    print("  1. MLP (Baseline)")
-    print("  2. CNN (Standard)")
-    print("  3. ResNet (Residual)")
-    print("  4. DeepCNN (Deeper)")
-    print("  5. Attention (Attention mechanism)")
+    available_models = models_config.get('available_models', ["mlp", "cnn", "resnet", "attention"])
+    for i, model in enumerate(available_models[:4], 1):  # Show first 4
+        model_desc = {
+            'mlp': 'MLP (Baseline)',
+            'cnn': 'CNN (Standard)',
+            'resnet': 'ResNet (Residual)',
+            'attention': 'Attention (Attention mechanism)',
+            'deepcnn': 'DeepCNN (Deep)'
+        }
+        print(f"  {i}. {model_desc.get(model, model.upper())}")
 
-    model_map = {
-        '1': 'mlp',
-        '2': 'cnn',
-        '3': 'resnet',
-        '4': 'deepcnn',
-        '5': 'attention'
-    }
+    model_map = {str(i+1): model for i, model in enumerate(available_models[:4])}
 
-    choice = input("\nSelect model (1-5, default: 2-CNN): ").strip()
+    default_choice = '2'  # CNN
+    choice = input(f"\nSelect model (1-4, default: {default_choice}): ").strip()
     if not choice:
-        choice = '2'
+        choice = default_choice
 
     model_name = model_map.get(choice, 'cnn')
 
-    epochs = input("Number of epochs (default: 50): ").strip()
+    # Get training parameters with config defaults
+    default_epochs = training_config.get('num_epochs', 50)
+    epochs = input(f"Number of epochs (default: {default_epochs}): ").strip()
     if not epochs:
-        epochs = "50"
+        epochs = str(default_epochs)
 
-    batch_size = input("Batch size (default: 32): ").strip()
+    default_batch = training_config.get('batch_size', 32)
+    batch_size = input(f"Batch size (default: {default_batch}): ").strip()
     if not batch_size:
-        batch_size = "32"
+        batch_size = str(default_batch)
 
     print(f"\nTraining {model_name.upper()} for {epochs} epochs...")
 
     from train import train_model
 
+    # Update config with user choices
+    config.set('training.num_epochs', int(epochs))
+    config.set('training.batch_size', int(batch_size))
+
     results = train_model(
         model_name=model_name,
-        data_dir='./tactile_data',
-        batch_size=int(batch_size),
+        config=config,
         num_epochs=int(epochs),
-        learning_rate=0.001
+        batch_size=int(batch_size)
     )
 
     print("\n" + "="*70)
@@ -137,7 +171,7 @@ def train_all_models():
     if not epochs:
         epochs = "50"
 
-    print(f"\nTraining all 5 models for {epochs} epochs each...")
+    print(f"\nTraining all 4 models for {epochs} epochs each...")
     print("This may take a while!")
 
     from compare_models import compare_all_models
@@ -157,78 +191,143 @@ def train_all_models():
     print("  - Comparison: ./comparison_results/")
 
 
-def run_full_pipeline(skip_collection=True):
-    """Run full pipeline"""
-    if not skip_collection:
-        print("\nFull pipeline will:")
-        print("  1. Collect data from sensor")
-        print("  2. Explore data")
-        print("  3. Train all models")
-        print("  4. Compare models")
-    else:
-        print("\nPipeline will:")
-        print("  1. Explore existing data")
-        print("  2. Train all models")
-        print("  3. Compare models")
+def evaluate_online():
+    """Evaluate model online with real-time predictions"""
+    print("\nOnline Model Evaluation")
+    print("="*50)
+    
+    # Load config
+    try:
+        config = load_config()
+        eval_config = config.get_evaluation_config()
+        sensor_config = config.get_sensor_config()
+        paths_config = config.get_paths_config()
+    except:
+        print("Warning: Could not load config, using defaults")
+        eval_config = {"min_confidence": 0.5, "smooth_predictions": True}
+        sensor_config = {"port": "/dev/ttyUSB0"}
+        paths_config = {"results_dir": "./results"}
+    
+    # Check for trained models in both possible locations
+    results_dir = paths_config.get('results_dir', './results')
+    comparison_dir = paths_config.get('comparison_dir', './comparison_results')
+    
+    models_found = False
+    search_dir = results_dir
+    
+    if os.path.exists(results_dir) and any(os.path.isdir(os.path.join(results_dir, d)) for d in os.listdir(results_dir)):
+        models_found = True
+        search_dir = results_dir
+    elif os.path.exists(comparison_dir) and any(os.path.isdir(os.path.join(comparison_dir, d)) for d in os.listdir(comparison_dir)):
+        models_found = True
+        search_dir = comparison_dir
+        print(f"📁 Using models from comparison results: {comparison_dir}")
+    
+    if not models_found:
+        print("❌ No trained models found!")
+        print("Please train a model first using option 3 or 4.")
+        return
+    
+    print("\nThis will connect to your tactile sensor and make real-time predictions.")
 
-    epochs = input("\nNumber of epochs per model (default: 50): ").strip()
-    if not epochs:
-        epochs = "50"
+    # Use config values directly (no prompts)
+    port = sensor_config.get('port', '/dev/ttyUSB0')
+    min_confidence = eval_config.get('min_confidence', 0.5)
+    smooth_predictions = eval_config.get('smooth_predictions', True)
 
-    print("\nStarting pipeline...")
+    print(f"Using sensor port: {port}")
+    print(f"Minimum confidence: {min_confidence}")
+    print(f"Smooth predictions: {'Yes' if smooth_predictions else 'No'}")
 
-    from pipeline import TactileClassificationPipeline
+    from eval_online import TactileOnlineEvaluator
 
-    config = TactileClassificationPipeline.get_default_config()
-    config['num_epochs'] = int(epochs)
+    try:
+        # List all available models
+        available_models = []
+        for model_dir in os.listdir(search_dir):
+            model_path_dir = os.path.join(search_dir, model_dir)
+            if os.path.isdir(model_path_dir):
+                results_file = os.path.join(model_path_dir, 'results.json')
+                model_file = os.path.join(model_path_dir, 'best_model.pth')
 
-    pipeline = TactileClassificationPipeline(config=config)
-    pipeline.run_full_pipeline(skip_collection=skip_collection)
+                if os.path.exists(results_file) and os.path.exists(model_file):
+                    with open(results_file, 'r') as f:
+                        results = json.load(f)
 
+                    accuracy = results.get('test_results', {}).get('accuracy', 0)
+                    base_model_name = model_dir.split('_')[0]
+                    available_models.append({
+                        'name': base_model_name,
+                        'full_name': model_dir,
+                        'path': model_file,
+                        'accuracy': accuracy
+                    })
 
-def create_config():
-    """Create custom configuration file"""
-    print("\nCreating custom configuration...")
+        if not available_models:
+            print("❌ No valid trained models found")
+            return
 
-    config_name = input("Configuration name (default: my_config): ").strip()
-    if not config_name:
-        config_name = "my_config"
+        # Sort by accuracy (best first)
+        available_models.sort(key=lambda x: x['accuracy'], reverse=True)
 
-    shapes = input("Shape labels (comma-separated, default: sphere,cube,cylinder): ").strip()
-    if not shapes:
-        shapes = "sphere,cube,cylinder"
-    shapes_list = [s.strip() for s in shapes.split(',')]
+        # Display available models
+        print("\n📋 Available models:")
+        for idx, model in enumerate(available_models, 1):
+            print(f"  {idx}. {model['full_name']} (accuracy: {model['accuracy']:.3f})")
 
-    samples = input("Samples per shape (default: 100): ").strip()
-    if not samples:
-        samples = "100"
+        # Let user choose model
+        while True:
+            choice = input(f"\nSelect model (1-{len(available_models)}): ").strip()
+            try:
+                choice_idx = int(choice) - 1
+                if 0 <= choice_idx < len(available_models):
+                    selected_model = available_models[choice_idx]
+                    break
+                else:
+                    print(f"❌ Please enter a number between 1 and {len(available_models)}")
+            except ValueError:
+                print("❌ Please enter a valid number")
 
-    epochs = input("Training epochs (default: 100): ").strip()
-    if not epochs:
-        epochs = "100"
+        print(f"\n🎯 Using model: {selected_model['full_name']} (accuracy: {selected_model['accuracy']:.3f})")
+        model_name = selected_model['name']
+        model_path = selected_model['path']
 
-    from pipeline import TactileClassificationPipeline
-    import json
+        print(f"\nStarting online evaluation...")
+        print("Controls:")
+        print("  - Press 'q' to quit")
+        print("  - Press 's' to save prediction history")
 
-    config = TactileClassificationPipeline.get_default_config()
-    config['shape_labels'] = shapes_list
-    config['samples_per_shape'] = int(samples)
-    config['num_epochs'] = int(epochs)
-
-    filename = f"{config_name}.json"
-    with open(filename, 'w') as f:
-        json.dump(config, f, indent=4)
-
-    print(f"\nConfiguration saved to: {filename}")
-    print(f"\nTo use this configuration, run:")
-    print(f"  python pipeline.py --config {filename} --step all")
+        input("\nPress Enter when ready...")
+        
+        # Create evaluator
+        evaluator = TactileOnlineEvaluator(
+            model_path=model_path,
+            model_name=model_name,
+            config=config
+        )
+        
+        # Start sensor
+        evaluator.start_sensor()
+        
+        # Run evaluation
+        evaluator.run_evaluation(
+            min_confidence=min_confidence,
+            smooth_predictions=smooth_predictions
+        )
+        
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        print("\nTroubleshooting:")
+        print("  1. Check sensor connection")
+        print("  2. Verify port (try ls /dev/ttyUSB*)")
+        print("  3. Check sensor permissions (sudo chmod 666 /dev/ttyUSB0)")
 
 
 def main():
     """Main quick start interface"""
     while True:
         print_menu()
-        choice = input("\nSelect option (1-8): ").strip()
+        choice = input("\nSelect option (1-6): ").strip()
 
         try:
             if choice == '1':
@@ -240,16 +339,12 @@ def main():
             elif choice == '4':
                 train_all_models()
             elif choice == '5':
-                run_full_pipeline(skip_collection=True)
+                evaluate_online()
             elif choice == '6':
-                run_full_pipeline(skip_collection=False)
-            elif choice == '7':
-                create_config()
-            elif choice == '8':
                 print("\nExiting... Goodbye!")
                 sys.exit(0)
             else:
-                print("\nInvalid choice! Please select 1-8.")
+                print("\nInvalid choice! Please select 1-6.")
                 continue
 
             input("\nPress Enter to return to menu...")

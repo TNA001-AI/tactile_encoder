@@ -328,7 +328,7 @@ def compare_all_models(data_dir='./tactile_data', batch_size=32,
         comparison DataFrame
     """
     # List of models to compare
-    models = ['mlp', 'cnn', 'resnet', 'deepcnn', 'attention']
+    models = ['mlp', 'cnn', 'resnet', 'attention']
 
     # Create comparator
     comparator = ModelComparator(results_dir='./comparison_results')
