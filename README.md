@@ -189,22 +189,6 @@ You can create a custom configuration file:
 - Global average pooling
 - Excellent for complex patterns
 
-### LSTM
-- Treats tactile data as sequential (rows as time steps)
-- 2-layer LSTM with hidden_dim=128
-- Good for capturing temporal/spatial dependencies
-
-### BiLSTM
-- Bidirectional LSTM processing
-- Captures context in both directions
-- Better than LSTM for spatial data
-
-### CNN-LSTM
-- Hybrid architecture
-- CNN for feature extraction
-- LSTM for sequential processing
-- Combines strengths of both approaches
-
 ## Output Files
 
 ### Training Results (per model)
