@@ -128,8 +128,8 @@ if __name__ == '__main__':
                 # contact_data_norm_scaled = (contact_data_norm * 255).astype(np.uint8)
 
                 # colormap = cv2.applyColorMap(contact_data_norm_scaled, cv2.COLORMAP_VIRIDIS)
-            # Apply Gaussian blur
-                
+                # Apply Gaussian blur
+                    
 
                 #contact_data_norm = apply_gaussian_blur(contact_data_norm)
 
