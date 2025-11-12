@@ -265,12 +265,12 @@ class TactileOnlineEvaluator:
         print("\nPress 'q' to quit, 's' to save prediction history")
         print("="*70)
         
-        # Create display window (match original size: 32*30 x 16*30)
+        # Create display window (larger size for better visibility)
         WINDOW_WIDTH = self.sensor_shape[1] * 30   # 32 * 30 = 960
-        WINDOW_HEIGHT = self.sensor_shape[0] * 30  # 16 * 30 = 480
+        WINDOW_HEIGHT = self.sensor_shape[0] * 30 + 100  # 16 * 30 + 100 = 580 (include text area)
         print("Creating display window...")
         cv2.namedWindow('Tactile Data', cv2.WINDOW_NORMAL)
-        cv2.resizeWindow('Tactile Data', WINDOW_WIDTH, WINDOW_HEIGHT)
+        cv2.resizeWindow('Tactile Data', WINDOW_WIDTH * 2, WINDOW_HEIGHT * 2)  # Double the window size
         
         # Test display with a simple image (match window size)
         test_img = np.zeros((WINDOW_HEIGHT, WINDOW_WIDTH, 3), dtype=np.uint8)
@@ -359,7 +359,31 @@ class TactileOnlineEvaluator:
                     # Apply VIRIDIS colormap (like original script)
                     display_img = cv2.applyColorMap(temp_filtered_data_scaled, cv2.COLORMAP_VIRIDIS)
 
-                    cv2.imshow('Tactile Data', display_img)
+                    # Resize to proper window size (32*30 x 16*30 = 960 x 480)
+                    WINDOW_WIDTH = self.sensor_shape[1] * 30  # 960
+                    WINDOW_HEIGHT = self.sensor_shape[0] * 30  # 480
+                    display_img_resized = cv2.resize(display_img, (WINDOW_WIDTH, WINDOW_HEIGHT), interpolation=cv2.INTER_NEAREST)
+
+                    # Create blank area below for prediction text
+                    text_area_height = 100
+                    text_area = np.zeros((text_area_height, WINDOW_WIDTH, 3), dtype=np.uint8)
+
+                    # Add prediction text to blank area (only if confidence >= min_confidence)
+                    if self.last_prediction is not None and self.prediction_confidence >= min_confidence:
+                        class_name = self.class_names[self.last_prediction]
+                        prediction_text = f"Prediction: {class_name}"
+                        confidence_text = f"Confidence: {self.prediction_confidence:.3f}"
+
+                        # Draw text on blank area
+                        cv2.putText(text_area, prediction_text, (10, 35),
+                                   cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                        cv2.putText(text_area, confidence_text, (10, 75),
+                                   cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+                    # Combine tactile data (top) and prediction area (bottom)
+                    combined_display = np.vstack([display_img_resized, text_area])
+
+                    cv2.imshow('Tactile Data', combined_display)
                     self.flag = False
                     
                     # Console output (throttled)
