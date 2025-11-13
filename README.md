@@ -25,6 +25,19 @@ pip install -r requirements.txt
 
 ## Quick Start
 
+### Change the Port Permission
+
+```bash
+sudo chmod 666 /dev/ttyUSB0
+```
+
+### Run Quick Start
+
+```bash
+cd ~/tactile_encoder
+python quick_start.py
+```
+
 ### Step-by-Step Execution
 
 #### Step 1: Collect Data
@@ -32,7 +45,6 @@ pip install -r requirements.txt
 # Collect data for different shapes
 python collect_data.py
 ```
-
 
 The data collector will:
 - Connect to your tactile sensor (default: /dev/ttyUSB0)

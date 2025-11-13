@@ -1,6 +1,6 @@
 {
   "sensor": {
-    "port": "/dev/ttyUSB1",
+    "port": "/dev/ttyUSB0",
     "baud_rate": 2000000,
     "shape": [16, 32],
     "timeout": 1
