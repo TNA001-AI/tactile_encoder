@@ -166,10 +166,16 @@ def train_single_model():
     eval_data_dir = paths_config.get('eval_data_dir', './eval_data')
     use_eval = 'n'
     if os.path.exists(eval_data_dir):
-        use_eval = input(f"\nUse separate evaluation dataset from {eval_data_dir}? (y/n, default: n): ").strip().lower()
+        use_eval = input(f"\nUse separate evaluation dataset from {eval_data_dir}? (y/n, default: y): ").strip().lower()
+        if not use_eval:
+            use_eval = 'y'
 
-    # Ask about wandb
-    use_wandb = input("\nEnable Wandb logging? (y/n, default: n): ").strip().lower()
+    # Ask about wandb - use config default
+    wandb_enabled = config.get('wandb.enabled', False)
+    default_wandb = 'y' if wandb_enabled else 'n'
+    use_wandb = input(f"\nEnable Wandb logging? (y/n, default: {default_wandb}): ").strip().lower()
+    if not use_wandb:
+        use_wandb = default_wandb
 
     print(f"\nTraining {model_name.upper()} for {epochs} epochs...")
     if use_eval == 'y':
@@ -202,20 +208,52 @@ def train_single_model():
 
 def train_all_models():
     """Train and compare all models"""
-    epochs = input("Number of epochs per model (default: 50): ").strip()
-    if not epochs:
-        epochs = "50"
+    # Load config
+    try:
+        config = load_config()
+        training_config = config.get_training_config()
+        paths_config = config.get_paths_config()
+    except:
+        print("Warning: Could not load config, using defaults")
+        training_config = {"num_epochs": 50, "batch_size": 32}
+        paths_config = {"eval_data_dir": "./eval_data"}
 
-    print(f"\nTraining all 4 models for {epochs} epochs each...")
+    default_epochs = training_config.get('num_epochs', 50)
+    epochs = input(f"Number of epochs per model (default: {default_epochs}): ").strip()
+    if not epochs:
+        epochs = str(default_epochs)
+
+    # Ask about eval dataset
+    eval_data_dir = paths_config.get('eval_data_dir', './eval_data')
+    use_eval = 'n'
+    if os.path.exists(eval_data_dir):
+        use_eval = input(f"\nUse separate evaluation dataset from {eval_data_dir}? (y/n, default: y): ").strip().lower()
+        if not use_eval:
+            use_eval = 'y'
+
+    # Ask about wandb
+    wandb_enabled = config.get('wandb.enabled', False)
+    default_wandb = 'y' if wandb_enabled else 'n'
+    use_wandb = input(f"\nEnable Wandb logging? (y/n, default: {default_wandb}): ").strip().lower()
+    if not use_wandb:
+        use_wandb = default_wandb
+
+    print(f"\nTraining all models for {epochs} epochs each...")
+    if use_eval == 'y':
+        print(f"Using evaluation dataset from: {eval_data_dir}")
+    if use_wandb == 'y':
+        print("Wandb logging enabled")
     print("This may take a while!")
 
     from compare_models import compare_all_models
 
     comparison_df = compare_all_models(
         data_dir='./tactile_data',
+        eval_data_dir=eval_data_dir if use_eval == 'y' else None,
         batch_size=32,
         num_epochs=int(epochs),
-        learning_rate=0.001
+        learning_rate=0.001,
+        use_wandb=(use_wandb == 'y')
     )
 
     print("\n" + "="*70)

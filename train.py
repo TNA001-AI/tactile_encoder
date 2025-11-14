@@ -11,6 +11,10 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingLR
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
+
+# Set matplotlib to non-interactive backend to avoid threading issues
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import datetime
@@ -333,8 +337,6 @@ class Trainer:
             })
 
             # Log confusion matrix as image
-            import matplotlib
-            matplotlib.use('Agg')
             fig, ax = plt.subplots(figsize=(10, 8))
             sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
                        xticklabels=self.label_names,

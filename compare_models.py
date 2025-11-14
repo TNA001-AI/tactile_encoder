@@ -27,17 +27,19 @@ class ModelComparator:
 
         self.model_results = {}
 
-    def train_all_models(self, model_names, data_dir='./tactile_data',
-                        batch_size=32, num_epochs=100, learning_rate=0.001):
+    def train_all_models(self, model_names, data_dir='./tactile_data', eval_data_dir=None,
+                        batch_size=32, num_epochs=100, learning_rate=0.001, use_wandb=False):
         """
         Train all specified models
 
         Args:
             model_names: list of model names to train
             data_dir: directory containing training data
+            eval_data_dir: directory containing evaluation data
             batch_size: batch size for training
             num_epochs: number of training epochs
             learning_rate: learning rate
+            use_wandb: whether to use wandb for logging
         """
         print("\n" + "=" * 60)
         print(f"Training {len(model_names)} models for comparison")
@@ -50,10 +52,12 @@ class ModelComparator:
                 results = train_model(
                     model_name=model_name,
                     data_dir=data_dir,
+                    eval_data_dir=eval_data_dir,
                     save_dir=os.path.join(self.results_dir, model_name),
                     batch_size=batch_size,
                     num_epochs=num_epochs,
-                    learning_rate=learning_rate
+                    learning_rate=learning_rate,
+                    use_wandb=use_wandb
                 )
 
                 self.model_results[model_name] = results
@@ -315,16 +319,18 @@ class ModelComparator:
         return df
 
 
-def compare_all_models(data_dir='./tactile_data', batch_size=32,
-                       num_epochs=100, learning_rate=0.001):
+def compare_all_models(data_dir='./tactile_data', eval_data_dir=None, batch_size=32,
+                       num_epochs=100, learning_rate=0.001, use_wandb=False):
     """
     Train and compare all available models
 
     Args:
         data_dir: directory containing training data
+        eval_data_dir: directory containing evaluation data
         batch_size: batch size for training
         num_epochs: number of training epochs
         learning_rate: learning rate
+        use_wandb: whether to use wandb for logging
 
     Returns:
         comparison DataFrame
@@ -339,9 +345,11 @@ def compare_all_models(data_dir='./tactile_data', batch_size=32,
     comparator.train_all_models(
         model_names=models,
         data_dir=data_dir,
+        eval_data_dir=eval_data_dir,
         batch_size=batch_size,
         num_epochs=num_epochs,
-        learning_rate=learning_rate
+        learning_rate=learning_rate,
+        use_wandb=use_wandb
     )
 
     # Generate report
