@@ -8,3 +8,4 @@ opencv-python>=4.6.0
 pandas>=1.4.0
 scipy>=1.8.0
 pyserial>=3.5
+wandb>=0.15.0

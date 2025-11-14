@@ -58,15 +58,17 @@ class TactileDataset(Dataset):
 class TactileDataLoader:
     """Utility class for loading and preparing tactile data"""
 
-    def __init__(self, data_dir='./tactile_data', test_size=0.2, val_size=0.1, random_state=42):
+    def __init__(self, data_dir='./tactile_data', eval_data_dir=None, test_size=0.2, val_size=0.1, random_state=42):
         """
         Args:
-            data_dir: directory containing .npz files
-            test_size: fraction of data for testing
+            data_dir: directory containing training .npz files
+            eval_data_dir: optional directory containing separate evaluation dataset
+            test_size: fraction of data for testing (ignored if eval_data_dir is provided)
             val_size: fraction of training data for validation
             random_state: random seed for reproducibility
         """
         self.data_dir = data_dir
+        self.eval_data_dir = eval_data_dir
         self.test_size = test_size
         self.val_size = val_size
         self.random_state = random_state
@@ -120,14 +122,43 @@ class TactileDataLoader:
         Returns:
             train_loader, val_loader, test_loader, num_classes, label_names
         """
-        # Load data
+        # Load training data
         data, labels = self.load_data_from_directory()
 
-        # Split into train+val and test
-        X_trainval, X_test, y_trainval, y_test = train_test_split(
-            data, labels, test_size=self.test_size,
-            random_state=self.random_state, stratify=labels
-        )
+        # If separate eval dataset is provided, use it for testing
+        if self.eval_data_dir and os.path.exists(self.eval_data_dir):
+            print(f"\nUsing separate evaluation dataset from: {self.eval_data_dir}")
+
+            # Load eval data
+            eval_files = glob.glob(os.path.join(self.eval_data_dir, '*.npz'))
+            if not eval_files:
+                print(f"Warning: No .npz files found in {self.eval_data_dir}, falling back to split")
+                # Fall back to splitting from training data
+                X_trainval, X_test, y_trainval, y_test = train_test_split(
+                    data, labels, test_size=self.test_size,
+                    random_state=self.random_state, stratify=labels
+                )
+            else:
+                all_eval_data = []
+                all_eval_labels = []
+                print(f"Loading evaluation data from {len(eval_files)} files...")
+                for npz_file in eval_files:
+                    eval_npz = np.load(npz_file)
+                    all_eval_data.append(eval_npz['data'])
+                    all_eval_labels.append(eval_npz['labels'])
+                    print(f"  Loaded {npz_file}: {eval_npz['data'].shape[0]} samples")
+
+                X_test = np.concatenate(all_eval_data, axis=0)
+                y_test = np.concatenate(all_eval_labels, axis=0)
+                X_trainval = data
+                y_trainval = labels
+                print(f"Total evaluation samples: {len(X_test)}")
+        else:
+            # Split into train+val and test
+            X_trainval, X_test, y_trainval, y_test = train_test_split(
+                data, labels, test_size=self.test_size,
+                random_state=self.random_state, stratify=labels
+            )
 
         # Split train into train and validation
         X_train, X_val, y_train, y_val = train_test_split(

@@ -13,29 +13,37 @@ def print_menu():
     print("\n" + "="*70)
     print("TACTILE SENSOR SHAPE CLASSIFICATION - QUICK START")
     print("="*70)
-    print("\n1. Collect new data from sensor")
-    print("2. Explore existing data")
-    print("3. Train a single model")
-    print("4. Train and compare all models")
-    print("5. Evaluate model online (real-time predictions)")
-    print("6. Exit")
+    print("\n1. Collect training data from sensor")
+    print("2. Collect evaluation data from sensor")
+    print("3. Explore existing data")
+    print("4. Train a single model")
+    print("5. Train and compare all models")
+    print("6. Evaluate model online (real-time predictions)")
+    print("7. Exit")
     print("\n" + "="*70)
 
 
-def collect_data():
-    """Collect data from sensor"""
-    print("\nStarting data collection...")
+def collect_data(is_eval=False):
+    """Collect data from sensor
+
+    Args:
+        is_eval: If True, collect evaluation data; otherwise collect training data
+    """
+    dataset_type = "EVALUATION" if is_eval else "TRAINING"
+    print(f"\nStarting {dataset_type} data collection...")
     print("Make sure your tactile sensor is connected!")
-    
+
     # Load config
     try:
         config = load_config()
         data_config = config.get_data_config()
         sensor_config = config.get_sensor_config()
+        paths_config = config.get_paths_config()
     except:
         print("Warning: Could not load config, using defaults")
         data_config = {"shape_labels": ["sphere", "cube", "cylinder"], "samples_per_shape": 100}
         sensor_config = {"port": "/dev/ttyUSB0", "baud_rate": 2000000}
+        paths_config = {"data_dir": "./tactile_data", "eval_data_dir": "./eval_data"}
 
     # Get user input with config defaults
     default_shapes = ",".join(data_config.get('shape_labels', ["sphere", "cube", "cylinder"]))
@@ -49,8 +57,15 @@ def collect_data():
     if not samples:
         samples = str(default_samples)
 
+    # Determine save directory
+    if is_eval:
+        save_dir = paths_config.get('eval_data_dir', './eval_data')
+    else:
+        save_dir = paths_config.get('data_dir', './tactile_data')
+
     print(f"\nWill collect {samples} samples for: {', '.join(shapes_list)}")
     print(f"Using sensor port: {sensor_config.get('port', '/dev/ttyUSB0')}")
+    print(f"Save directory: {save_dir}")
     input("Press Enter to start...")
 
     from collect_data import TactileDataCollector
@@ -58,7 +73,8 @@ def collect_data():
     # Update config with user choices
     config.set('data_collection.shape_labels', shapes_list)
     config.set('data_collection.samples_per_shape', int(samples))
-    
+    config.set('data_collection.data_dir', save_dir)
+
     collector = TactileDataCollector(config=config)
 
     try:
@@ -66,8 +82,10 @@ def collect_data():
         collector.collect_dataset(
             shape_labels=shapes_list,
             samples_per_shape=int(samples),
-            save_dir=config.get('paths.data_dir', './tactile_data')
+            save_dir=save_dir
         )
+        print(f"\n✓ {dataset_type} data collection completed!")
+        print(f"Data saved to: {save_dir}")
     finally:
         collector.close()
 
@@ -105,11 +123,13 @@ def train_single_model():
         config = load_config()
         training_config = config.get_training_config()
         models_config = config.get_model_config()
+        paths_config = config.get_paths_config()
     except:
         print("Warning: Could not load config, using defaults")
         training_config = {"num_epochs": 50, "batch_size": 32, "learning_rate": 0.001}
         models_config = {"available_models": ["mlp", "cnn", "resnet", "attention"]}
-    
+        paths_config = {"eval_data_dir": "./eval_data"}
+
     print("\nAvailable models:")
     available_models = models_config.get('available_models', ["mlp", "cnn", "resnet", "attention"])
     for i, model in enumerate(available_models[:4], 1):  # Show first 4
@@ -142,7 +162,20 @@ def train_single_model():
     if not batch_size:
         batch_size = str(default_batch)
 
+    # Ask about using eval dataset
+    eval_data_dir = paths_config.get('eval_data_dir', './eval_data')
+    use_eval = 'n'
+    if os.path.exists(eval_data_dir):
+        use_eval = input(f"\nUse separate evaluation dataset from {eval_data_dir}? (y/n, default: n): ").strip().lower()
+
+    # Ask about wandb
+    use_wandb = input("\nEnable Wandb logging? (y/n, default: n): ").strip().lower()
+
     print(f"\nTraining {model_name.upper()} for {epochs} epochs...")
+    if use_eval == 'y':
+        print(f"Using evaluation dataset from: {eval_data_dir}")
+    if use_wandb == 'y':
+        print("Wandb logging enabled")
 
     from train import train_model
 
@@ -154,7 +187,9 @@ def train_single_model():
         model_name=model_name,
         config=config,
         num_epochs=int(epochs),
-        batch_size=int(batch_size)
+        batch_size=int(batch_size),
+        eval_data_dir=eval_data_dir if use_eval == 'y' else None,
+        use_wandb=(use_wandb == 'y')
     )
 
     print("\n" + "="*70)
@@ -327,24 +362,26 @@ def main():
     """Main quick start interface"""
     while True:
         print_menu()
-        choice = input("\nSelect option (1-6): ").strip()
+        choice = input("\nSelect option (1-7): ").strip()
 
         try:
             if choice == '1':
-                collect_data()
+                collect_data(is_eval=False)
             elif choice == '2':
-                explore_data()
+                collect_data(is_eval=True)
             elif choice == '3':
-                train_single_model()
+                explore_data()
             elif choice == '4':
-                train_all_models()
+                train_single_model()
             elif choice == '5':
-                evaluate_online()
+                train_all_models()
             elif choice == '6':
+                evaluate_online()
+            elif choice == '7':
                 print("\nExiting... Goodbye!")
                 sys.exit(0)
             else:
-                print("\nInvalid choice! Please select 1-6.")
+                print("\nInvalid choice! Please select 1-7.")
                 continue
 
             input("\nPress Enter to return to menu...")

@@ -6,7 +6,11 @@
     "timeout": 1
   },
   "data_collection": {
-    "shape_labels": ["sphere", "cube", "cylinder", "cone", "pyramid"],
+    "shape_labels":[
+      "circle",
+      "triangle",
+      "rectangle"
+  ],
     "samples_per_shape": 100,
     "data_dir": "./tactile_data",
     "threshold": 30,
@@ -60,9 +64,16 @@
   },
   "paths": {
     "data_dir": "./tactile_data",
+    "eval_data_dir": "./eval_data",
     "results_dir": "./results",
     "comparison_dir": "./comparison_results",
     "config_dir": "./configs"
+  },
+  "wandb": {
+    "enabled": false,
+    "project": "tactile-classification",
+    "entity": null,
+    "tags": ["tactile", "shape-classification"]
   },
   "logging": {
     "level": "INFO",

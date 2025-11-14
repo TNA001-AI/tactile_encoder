@@ -1,5 +1,6 @@
 # Collected tactile data
 tactile_data/
+eval_data/
 *.npz
 
 # Training results and models

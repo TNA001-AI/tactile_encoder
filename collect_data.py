@@ -53,7 +53,8 @@ class TactileDataCollector:
         self.serDev = None
         self.serialThread = None
         self.prev_frame = np.zeros(self.sensor_shape)
-        
+        self.running = False  # Flag to control thread execution
+
         # Collection tracking
         self.collected_samples = []
         self.current_label = None
@@ -64,8 +65,8 @@ class TactileDataCollector:
         current = None
 
         # Main reading loop
-        while True:
-            if self.serDev.in_waiting > 0:
+        while self.running:
+            if self.serDev and self.serDev.is_open and self.serDev.in_waiting > 0:
                 try:
                     line = self.serDev.readline().decode('utf-8').strip()
                 except:
@@ -84,7 +85,7 @@ class TactileDataCollector:
                             self.contact_data_norm = contact_data / self.NOISE_SCALE
                         else:
                             self.contact_data_norm = contact_data / np.max(contact_data)
-                        
+
                         # Apply gaussian smoothing
                         self.contact_data_norm = gaussian_filter(self.contact_data_norm, sigma=self.gaussian_sigma)
                     continue
@@ -93,6 +94,9 @@ class TactileDataCollector:
                     str_values = line.split()
                     int_values = [int(val) for val in str_values]
                     current.append(int_values)
+            else:
+                # Small sleep to prevent busy-waiting
+                time.sleep(0.001)
 
     def temporal_filter(self, new_frame, alpha=0.2):
         """Apply temporal smoothing filter"""
@@ -137,6 +141,7 @@ class TactileDataCollector:
 
         # Start continuous reading thread
         self.flag = True
+        self.running = True
         self.serialThread = threading.Thread(target=self.readThread)
         self.serialThread.daemon = True
         self.serialThread.start()
@@ -281,7 +286,15 @@ class TactileDataCollector:
 
     def close(self):
         """Close serial connection"""
-        if self.serDev:
+        # Stop the reading thread first
+        self.running = False
+
+        # Wait for thread to finish (with timeout)
+        if self.serialThread and self.serialThread.is_alive():
+            self.serialThread.join(timeout=1.0)
+
+        # Close serial device
+        if self.serDev and self.serDev.is_open:
             self.serDev.close()
 
 
@@ -293,7 +306,8 @@ def main():
     parser.add_argument('--shapes', type=str, nargs='+', help='Shape labels to collect')
     parser.add_argument('--samples', type=int, help='Samples per shape (overrides config)')
     parser.add_argument('--data-dir', type=str, help='Output directory (overrides config)')
-    
+    parser.add_argument('--eval', action='store_true', help='Collect evaluation dataset (saved to eval_data directory)')
+
     args = parser.parse_args()
     
     # Load configuration
@@ -312,12 +326,21 @@ def main():
     # Handle shapes argument
     if args.shapes:
         config.set('data_collection.shape_labels', args.shapes)
-    
+
+    # Handle evaluation dataset flag
+    if args.eval:
+        eval_dir = config.get('paths.eval_data_dir', './eval_data')
+        if args.data_dir is None:
+            config.set('data_collection.data_dir', eval_dir)
+        dataset_type = "EVALUATION"
+    else:
+        dataset_type = "TRAINING"
+
     # Create collector
     collector = TactileDataCollector(config)
-    
+
     print("\n" + "="*70)
-    print("TACTILE DATA COLLECTION")
+    print(f"TACTILE {dataset_type} DATA COLLECTION")
     print("="*70)
     print(f"Sensor: {collector.port} @ {collector.baud} baud")
     print(f"Shapes: {collector.shape_labels}")

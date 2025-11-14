@@ -19,12 +19,19 @@ from dataset import TactileDataLoader
 from models import get_model
 from config_utils import load_config, override_config_from_args
 
+try:
+    import wandb
+    WANDB_AVAILABLE = True
+except ImportError:
+    WANDB_AVAILABLE = False
+    print("Warning: wandb not installed. Install with: pip install wandb")
+
 
 class Trainer:
     """Training pipeline for tactile classification models"""
 
     def __init__(self, model, train_loader, val_loader, test_loader,
-                 num_classes, label_names, config=None, save_dir=None):
+                 num_classes, label_names, config=None, save_dir=None, use_wandb=False, wandb_project=None):
         """
         Args:
             model: PyTorch model
@@ -35,33 +42,41 @@ class Trainer:
             label_names: list of class names
             config: ConfigManager instance
             save_dir: directory to save results (overrides config)
+            use_wandb: whether to use wandb for logging
+            wandb_project: wandb project name
         """
         if config is None:
             from config_utils import load_config
             config = load_config()
-        
+
         self.config = config
         training_config = config.get_training_config()
-        
+
         # Device setup
         if training_config.get('use_cuda', True) and torch.cuda.is_available():
             self.device = 'cuda'
         else:
             self.device = 'cpu'
-        
+
         self.model = model.to(self.device)
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.test_loader = test_loader
         self.num_classes = num_classes
         self.label_names = label_names
-        
+
         # Save directory
         if save_dir is None:
             save_dir = config.get('paths.results_dir', './results')
         self.save_dir = save_dir
-        
+
         os.makedirs(save_dir, exist_ok=True)
+
+        # Wandb setup
+        self.use_wandb = use_wandb and WANDB_AVAILABLE
+        if self.use_wandb and not WANDB_AVAILABLE:
+            print("Warning: wandb requested but not available. Continuing without wandb.")
+            self.use_wandb = False
 
         # Training history
         self.history = {
@@ -216,6 +231,18 @@ class Trainer:
                   f"Val Loss: {val_loss:.4f} Acc: {val_acc:.4f} | "
                   f"Time: {epoch_time:.2f}s")
 
+            # Log to wandb
+            if self.use_wandb:
+                wandb.log({
+                    'epoch': epoch + 1,
+                    'train/loss': train_loss,
+                    'train/accuracy': train_acc,
+                    'val/loss': val_loss,
+                    'val/accuracy': val_acc,
+                    'epoch_time': epoch_time,
+                    'learning_rate': optimizer.param_groups[0]['lr']
+                })
+
             # Save best model
             if val_acc > self.best_val_acc:
                 self.best_val_acc = val_acc
@@ -296,6 +323,28 @@ class Trainer:
         print(f"  F1-Score:  {f1:.4f}")
         print("=" * 60)
 
+        # Log test results to wandb
+        if self.use_wandb:
+            wandb.log({
+                'test/accuracy': accuracy,
+                'test/precision': precision,
+                'test/recall': recall,
+                'test/f1_score': f1
+            })
+
+            # Log confusion matrix as image
+            import matplotlib
+            matplotlib.use('Agg')
+            fig, ax = plt.subplots(figsize=(10, 8))
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                       xticklabels=self.label_names,
+                       yticklabels=self.label_names, ax=ax)
+            ax.set_xlabel('Predicted')
+            ax.set_ylabel('True')
+            ax.set_title('Confusion Matrix')
+            wandb.log({"test/confusion_matrix": wandb.Image(fig)})
+            plt.close(fig)
+
         return results, all_preds, all_labels, all_probs
 
     def save_checkpoint(self, filename):
@@ -366,8 +415,8 @@ class Trainer:
         plt.close()
 
 
-def train_model(model_name, config=None, data_dir=None, save_dir=None,
-                batch_size=None, num_epochs=None, learning_rate=None):
+def train_model(model_name, config=None, data_dir=None, eval_data_dir=None, save_dir=None,
+                batch_size=None, num_epochs=None, learning_rate=None, use_wandb=False, wandb_project=None):
     """
     Complete training pipeline for a single model
 
@@ -375,10 +424,13 @@ def train_model(model_name, config=None, data_dir=None, save_dir=None,
         model_name: name of the model to train
         config: ConfigManager instance (loads default if None)
         data_dir: directory containing training data (overrides config)
+        eval_data_dir: directory containing evaluation data (overrides config)
         save_dir: directory to save results (overrides config)
         batch_size: batch size for training (overrides config)
         num_epochs: number of training epochs (overrides config)
         learning_rate: learning rate (overrides config)
+        use_wandb: whether to use wandb for logging
+        wandb_project: wandb project name
 
     Returns:
         results dictionary
@@ -386,13 +438,15 @@ def train_model(model_name, config=None, data_dir=None, save_dir=None,
     # Load config if not provided
     if config is None:
         config = load_config()
-    
+
     # Get config values with overrides
     training_config = config.get_training_config()
     paths_config = config.get_paths_config()
-    
+
     if data_dir is None:
         data_dir = paths_config.get('data_dir', './tactile_data')
+    if eval_data_dir is None:
+        eval_data_dir = paths_config.get('eval_data_dir', None)
     if save_dir is None:
         save_dir = os.path.join(paths_config.get('results_dir', './results'), model_name)
     if batch_size is None:
@@ -401,20 +455,41 @@ def train_model(model_name, config=None, data_dir=None, save_dir=None,
         num_epochs = training_config.get('num_epochs', 100)
     if learning_rate is None:
         learning_rate = training_config.get('learning_rate', 0.001)
+
+    # Wandb config
+    if use_wandb is None:
+        use_wandb = config.get('wandb.enabled', False)
+    if wandb_project is None:
+        wandb_project = config.get('wandb.project', 'tactile-classification')
     # Setup
     device = torch.device('cpu')
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    if save_dir is None:
-        save_dir = f'./results/{model_name}_{timestamp}'
     os.makedirs(save_dir, exist_ok=True)
+
+    # Initialize wandb
+    if use_wandb and WANDB_AVAILABLE:
+        wandb.init(
+            project=wandb_project,
+            name=f"{model_name}_{timestamp}",
+            config={
+                "model": model_name,
+                "batch_size": batch_size,
+                "num_epochs": num_epochs,
+                "learning_rate": learning_rate,
+                "data_dir": data_dir,
+                "eval_data_dir": eval_data_dir
+            }
+        )
 
     print(f"\n{'='*60}")
     print(f"Training {model_name.upper()} model")
     print(f"{'='*60}")
+    if use_wandb and WANDB_AVAILABLE:
+        print(f"Wandb logging enabled - Project: {wandb_project}")
 
     # Load data
-    data_loader = TactileDataLoader(data_dir=data_dir)
+    data_loader = TactileDataLoader(data_dir=data_dir, eval_data_dir=eval_data_dir)
     train_loader, val_loader, test_loader, num_classes, label_names = \
         data_loader.prepare_dataloaders(batch_size=batch_size)
 
@@ -430,7 +505,8 @@ def train_model(model_name, config=None, data_dir=None, save_dir=None,
 
     # Create trainer
     trainer = Trainer(model, train_loader, val_loader, test_loader,
-                     num_classes, label_names, config=config, save_dir=save_dir)
+                     num_classes, label_names, config=config, save_dir=save_dir,
+                     use_wandb=use_wandb, wandb_project=wandb_project)
 
     # Train
     history = trainer.train(num_epochs=num_epochs, learning_rate=learning_rate)
@@ -459,6 +535,10 @@ def train_model(model_name, config=None, data_dir=None, save_dir=None,
 
     print(f"\nResults saved to: {save_dir}")
 
+    # Finish wandb run
+    if use_wandb and WANDB_AVAILABLE:
+        wandb.finish()
+
     return results
 
 
@@ -467,12 +547,15 @@ def main():
     parser = argparse.ArgumentParser(description='Train tactile classification model')
     parser.add_argument('--config', type=str, default='config.json', help='Configuration file path')
     parser.add_argument('--model', type=str, help='Model name (overrides config)')
-    parser.add_argument('--data-dir', type=str, help='Data directory (overrides config)')
+    parser.add_argument('--data-dir', type=str, help='Training data directory (overrides config)')
+    parser.add_argument('--eval-data-dir', type=str, help='Evaluation data directory (overrides config)')
     parser.add_argument('--batch-size', type=int, help='Batch size (overrides config)')
     parser.add_argument('--epochs', type=int, help='Number of epochs (overrides config)')
     parser.add_argument('--learning-rate', type=float, help='Learning rate (overrides config)')
     parser.add_argument('--save-dir', type=str, help='Results directory (overrides config)')
-    
+    parser.add_argument('--wandb', action='store_true', help='Enable wandb logging')
+    parser.add_argument('--wandb-project', type=str, help='Wandb project name')
+
     args = parser.parse_args()
     
     # Load configuration
@@ -510,18 +593,23 @@ def main():
             model_name=model_name,
             config=config,
             data_dir=args.data_dir,
+            eval_data_dir=args.eval_data_dir,
             save_dir=args.save_dir,
             batch_size=args.batch_size,
             num_epochs=args.epochs,
-            learning_rate=args.learning_rate
+            learning_rate=args.learning_rate,
+            use_wandb=args.wandb,
+            wandb_project=args.wandb_project
         )
-        
+
         print(f"\n✓ Training completed successfully!")
         print(f"Test Accuracy: {results['test_results']['accuracy']:.4f}")
         print(f"Results saved to: {results.get('save_dir', 'results')}")
-        
+
     except Exception as e:
         print(f"\n❌ Training failed: {e}")
+        if WANDB_AVAILABLE and args.wandb:
+            wandb.finish()
         raise
 
 

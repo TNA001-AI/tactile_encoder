@@ -186,6 +186,7 @@ class ModelComparator:
         ax4.set_xlabel('Training Time (minutes)')
         ax4.set_ylabel('Model')
         ax4.set_title('Training Time Comparison')
+        ax4.set_yticks(range(len(model_names)))
         ax4.set_yticklabels([m.upper() for m in model_names])
         ax4.grid(True, alpha=0.3, axis='x')
 
@@ -225,6 +226,7 @@ class ModelComparator:
         ax6.set_xlabel('Model')
         ax6.set_ylabel('Accuracy per 1K Parameters')
         ax6.set_title('Model Efficiency')
+        ax6.set_xticks(range(len(model_names)))
         ax6.set_xticklabels([m.upper() for m in model_names], rotation=45, ha='right')
         ax6.grid(True, alpha=0.3, axis='y')
 

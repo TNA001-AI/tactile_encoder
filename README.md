@@ -38,11 +38,20 @@ cd ~/tactile_encoder
 python quick_start.py
 ```
 
+The quick start menu now includes:
+1. Collect training data
+2. Collect evaluation data (new!)
+3. Explore existing data
+4. Train a single model (with wandb option)
+5. Train and compare all models
+6. Evaluate model online
+7. Exit
+
 ### Step-by-Step Execution
 
-#### Step 1: Collect Data
+#### Step 1: Collect Training Data
 ```bash
-# Collect data for different shapes
+# Collect training data for different shapes
 python collect_data.py
 ```
 
@@ -53,17 +62,44 @@ The data collector will:
 - Press 's' to save each sample, 'q' to finish early
 - Save data as .npz files in `./tactile_data/`
 
-#### Step 2: Train Models
+#### Step 2: Collect Evaluation Data (Optional but Recommended)
 ```bash
-python train.py
+# Collect a separate evaluation dataset
+python collect_data.py --eval
 ```
 
-#### Step 3: Compare Models
+This will save evaluation data to `./eval_data/`. Having a separate evaluation dataset helps:
+- Better assess model generalization
+- Avoid data leakage
+- Get more reliable performance metrics
+
+#### Step 3: Train Models
+```bash
+# Basic training
+python train.py
+
+# Training with wandb logging
+python train.py --wandb --wandb-project my-tactile-project
+
+# Training with evaluation dataset
+python train.py --eval-data-dir ./eval_data
+
+# Training with all options
+python train.py --model cnn --wandb --eval-data-dir ./eval_data --epochs 100
+```
+
+**Wandb Integration:**
+- Enable with `--wandb` flag
+- Track training metrics in real-time
+- Visualize loss, accuracy, and confusion matrices
+- Compare multiple runs
+
+#### Step 4: Compare Models
 ```bash
 python compare_models.py
 ```
 
-#### Step 4: Evaluate Online (Real-time Predictions)
+#### Step 5: Evaluate Online (Real-time Predictions)
 ```bash
 python eval_online.py
 ```
@@ -164,21 +200,57 @@ tactile_encoder/
 
 ## Configuration
 
-You can create a custom configuration file:
+The [config.json](config.json) file contains all configuration settings:
 
 ```json
 {
-    "sensor_port": "/dev/ttyUSB0",
-    "sensor_baud": 2000000,
-    "sensor_shape": [16, 32],
+  "sensor": {
+    "port": "/dev/ttyUSB0",
+    "baud_rate": 2000000,
+    "shape": [16, 32]
+  },
+  "data_collection": {
     "shape_labels": ["sphere", "cube", "cylinder", "cone", "pyramid"],
     "samples_per_shape": 100,
-    "data_dir": "./tactile_data",
+    "data_dir": "./tactile_data"
+  },
+  "training": {
     "batch_size": 32,
     "num_epochs": 100,
     "learning_rate": 0.001,
-    "models_to_train": ["mlp", "cnn", "resnet", "lstm", "bilstm", "cnn_lstm"]
+    "weight_decay": 1e-4,
+    "patience": 10
+  },
+  "paths": {
+    "data_dir": "./tactile_data",
+    "eval_data_dir": "./eval_data",
+    "results_dir": "./results"
+  },
+  "wandb": {
+    "enabled": false,
+    "project": "tactile-classification",
+    "entity": null,
+    "tags": ["tactile", "shape-classification"]
+  }
 }
+```
+
+### Wandb Configuration
+
+To enable wandb logging by default, edit [config.json](config.json):
+```json
+{
+  "wandb": {
+    "enabled": true,
+    "project": "your-project-name",
+    "entity": "your-wandb-username"
+  }
+}
+```
+
+Or use command line flags:
+```bash
+python train.py --wandb --wandb-project my-project
 ```
 
 
@@ -266,12 +338,39 @@ All models are evaluated on:
 - **Training Time**: Total time and per-epoch
 - **Model Size**: Number of parameters
 
+## Features
+
+### Separate Evaluation Dataset
+This pipeline supports collecting and using a separate evaluation dataset:
+- **Collect**: `python collect_data.py --eval`
+- **Train with eval data**: `python train.py --eval-data-dir ./eval_data`
+- **Benefits**: Better generalization assessment, no data leakage, more reliable metrics
+
+### Wandb Integration
+Track your experiments with Weights & Biases:
+- **Real-time metrics**: Monitor training loss, accuracy, and validation performance
+- **Visualizations**: Automatic confusion matrix and training curve logging
+- **Experiment tracking**: Compare multiple runs and hyperparameters
+- **Setup**: Run `wandb login` first, then use `--wandb` flag
+
+**Logged Metrics:**
+- Training and validation loss/accuracy per epoch
+- Test accuracy, precision, recall, F1-score
+- Confusion matrix visualization
+- Learning rate schedule
+- Model parameters and configuration
+
 ## Troubleshooting
 
 ### Sensor Connection Issues
 - Check USB port: `ls /dev/ttyUSB*`
 - Verify baud rate matches sensor configuration
 - Ensure proper permissions: `sudo chmod 666 /dev/ttyUSB0`
+
+### Wandb Issues
+- **Not logged in**: Run `wandb login` and enter your API key
+- **Offline mode**: Add `wandb offline` before training
+- **Disable wandb**: Remove `--wandb` flag or set `"enabled": false` in config
 
 ## Credits
 
