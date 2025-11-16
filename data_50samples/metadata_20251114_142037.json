@@ -1,0 +1,12 @@
+{
+    "shape_labels": [
+        "triangle"
+    ],
+    "samples_per_shape": 50,
+    "total_samples": 50,
+    "sensor_shape": [
+        16,
+        32
+    ],
+    "timestamp": "20251114_142037"
+}

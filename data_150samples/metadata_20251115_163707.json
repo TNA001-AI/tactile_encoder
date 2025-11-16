@@ -1,0 +1,12 @@
+{
+    "shape_labels": [
+        "circle"
+    ],
+    "samples_per_shape": 150,
+    "total_samples": 150,
+    "sensor_shape": [
+        16,
+        32
+    ],
+    "timestamp": "20251115_163707"
+}
