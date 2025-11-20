@@ -64,3 +64,5 @@ Thumbs.db
 # Temporary files
 *.tmp
 temp/
+data_100samples/
+data_50samples/
