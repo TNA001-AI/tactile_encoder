@@ -229,6 +229,20 @@ class TactileOnlineEvaluator:
     def predict(self, tactile_data):
         """Make prediction on tactile data"""
         try:
+            # Check if sensor has meaningful contact (avoid predicting on empty sensor)
+            data_mean = np.mean(tactile_data)
+            data_max = np.max(tactile_data)
+            
+            # Threshold to detect empty/no-contact state
+            # Based on training data analysis: minimum sample mean was ~0.0064 for actual objects
+            # Use a conservative threshold of 0.003 to avoid false predictions on noise
+            MIN_ACTIVATION_MEAN = 0.003
+            MIN_ACTIVATION_MAX = 0.01
+            
+            if data_mean < MIN_ACTIVATION_MEAN or data_max < MIN_ACTIVATION_MAX:
+                # Sensor likely empty - return None to indicate no valid prediction
+                return None, 0.0, None
+            
             # Prepare input tensor
             input_tensor = torch.FloatTensor(tactile_data).unsqueeze(0).unsqueeze(0).to(self.device)
             
@@ -348,6 +362,11 @@ class TactileOnlineEvaluator:
                             'all_probabilities': probabilities.tolist() if probabilities is not None else None
                         }
                         self.prediction_history.append(prediction_record)
+                    else:
+                        # No object detected - reset prediction state
+                        self.last_prediction = None
+                        self.prediction_confidence = 0.0
+                        prediction_buffer.clear()  # Clear buffer when no object detected
                     
                     # Apply temporal filter (like original script)
                     temp_filtered_data = temporal_filter(self.contact_data_norm, prev_frame, alpha=self.temporal_alpha)
@@ -368,7 +387,7 @@ class TactileOnlineEvaluator:
                     text_area_height = 100
                     text_area = np.zeros((text_area_height, WINDOW_WIDTH, 3), dtype=np.uint8)
 
-                    # Add prediction text to blank area (only if confidence >= min_confidence)
+                    # Add prediction text to blank area
                     if self.last_prediction is not None and self.prediction_confidence >= min_confidence:
                         class_name = self.class_names[self.last_prediction]
                         prediction_text = f"Prediction: {class_name}"
@@ -379,6 +398,10 @@ class TactileOnlineEvaluator:
                                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                         cv2.putText(text_area, confidence_text, (10, 75),
                                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    elif self.last_prediction is None:
+                        # No prediction - likely empty sensor
+                        cv2.putText(text_area, "Status: No Object Detected", (10, 50),
+                                   cv2.FONT_HERSHEY_SIMPLEX, 1, (100, 100, 255), 2)
 
                     # Combine tactile data (top) and prediction area (bottom)
                     combined_display = np.vstack([display_img_resized, text_area])
@@ -392,9 +415,9 @@ class TactileOnlineEvaluator:
                             class_name = self.class_names[self.last_prediction]
                             if self.prediction_confidence >= min_confidence:
                                 print(f"\033[92mPrediction: {class_name} (confidence: {self.prediction_confidence:.3f})\033[0m")
-                            else:
-                                # print(f"Low confidence: {class_name} ({self.prediction_confidence:.3f})")
-                                continue
+                        else:
+                            # Empty sensor - no object detected
+                            print(f"\033[93mStatus: No Object Detected\033[0m")
                                 
                         last_update = current_time
                 
